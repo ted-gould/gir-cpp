@@ -4,29 +4,84 @@ import sys
 from gi.repository import UbuntuAppLaunch as importedgir
 import gi
 
+class Typeinfo:
+	def __init__(self, cstr, cppstr, c2cpp, cpp2c, cfree = ''):
+		self._cstr = cstr
+		self._cppstr = cppstr
+		self._cpp2c = cpp2c
+		self._c2cpp = c2cpp
+		self._cfree = cfree
+	def cstr (self):
+		return self._cstr
+	def cppstr (self):
+		return self._cppstr
+	def cpp2c (self, varname):
+		return self._cpp2c % (varname)
+	def c2cpp (self, varname):
+		return self._c2cpp % (varname)
+	def cfree (self, varname):
+		if not self._cfree or self._cfree == '':
+			return ''
+		return self._cfree % (varname)
+
+class TypeBool(Typeinfo):
+	def __init__(self):
+		self._cstr = 'gboolean'
+		self._cppstr = 'bool'
+		self._c2cpp = '(%s == TRUE ? true : false)'
+		self._cpp2c = '(%s ? TRUE : FALSE)'
+
+class TypeInt(Typeinfo):
+	def __init__(self):
+		self._cstr = 'gint32'
+		self._cppstr = 'int'
+		self._c2cpp = '%s'
+		self._cpp2c = '%s'
+
+class TypeString(Typeinfo):
+	def __init__(self):
+		self._cstr = 'gchar *'
+		self._cppstr = 'std::string'
+		self._c2cpp = 'std::string(%s)'
+		self._cpp2c = '%s.get_cstr()'
+		self._cfree = 'g_free(%s)'
+
+class TypeArray(Typeinfo):
+	def __init__(self, insidetype):
+		self._insidetype = insidetype
+	def cstr (self):
+		cstr = self._insidetype.cstr()
+		cstr += '*'
+		return cstr
+	def cppstr (self):
+		return 'std::vector<%s>' % (self._insidetype.cppstr())
+	def c2cpp (self, varname):
+		return ''
+	def cpp2c (self, varname):
+		return ''
+	def cfree (self, varname):
+		return ''
+
 def typeParse (typeinfo):
 	if typeinfo.get_tag_as_string() == 'gboolean':
-		return 'bool'
+		return TypeBool()
 	elif typeinfo.get_tag_as_string() == 'gint32':
-		return 'int'
+		return TypeInt()
 	elif typeinfo.get_tag_as_string() == 'utf8':
-		return 'std::string'
+		return TypeString()
 	elif typeinfo.get_tag_as_string() == 'array':
-		arraystr = 'std::vector<'
-		arraystr += typeParse(typeinfo.get_param_type(0))
-		arraystr += '>'
-		return arraystr
+		return TypeArray(typeParse(typeinfo.get_param_type(0)))
 	else:
-		return 'unknown(%s)' % typeinfo.get_tag_as_string()
+		return Typeinfo('unknown', 'unknown', '/* TODO */', '/* TODO */')
 
 def functionParse (func):
 	functiondef = ''
-	functiondef += typeParse(func.get_return_type())
+	functiondef += typeParse(func.get_return_type()).cppstr()
 	functiondef += ' '
 	functiondef += func.get_name()
 	functiondef += ' ( '
 	for arg in func.get_arguments():
-		functiondef += typeParse(arg.get_type())
+		functiondef += typeParse(arg.get_type()).cppstr()
 		functiondef += ' '
 		functiondef += arg.get_name()
 		functiondef += ', '
