@@ -23,6 +23,8 @@ class Typeinfo:
 		if self._cfree == '':
 			return ''
 		return self._cfree % (varname)
+	def marker (self):
+		return self._marker
 
 class TypeUnknown(Typeinfo):
 	def __init__(self):
@@ -43,14 +45,16 @@ class TypeInt(Typeinfo):
 		self._c2cpp = '%s'
 		self._cpp2c = '%s'
 		self._cfree = ''
+		self._marker = '0'
 
 class TypeString(Typeinfo):
 	def __init__(self):
 		self._cstr = 'gchar *'
 		self._cppstr = 'std::string'
 		self._c2cpp = 'std::string(%s)'
-		self._cpp2c = '%s.get_cstr()'
+		self._cpp2c = 'g_strdup(%s.get_cstr())'
 		self._cfree = 'g_free(%s)'
+		self._marker = 'NULL'
 
 class TypeArray(Typeinfo):
 	def __init__(self, insidetype):
@@ -62,7 +66,17 @@ class TypeArray(Typeinfo):
 	def cppstr (self):
 		return 'std::vector<%s>' % (self._insidetype.cppstr())
 	def c2cpp (self, varname):
-		return ''
+		cbuilder = ''
+		cbuilder += '[](%s input) => %s {' % (self.cstr(), self.cppstr())
+		cbuilder += '%s retval();' % self.cppstr()
+		cbuilder += 'int i = 0; '
+		cbuilder += 'for (i = 0; input[i] != %s; i++) {' % (self._insidetype.marker())
+		cbuilder += '%s cppitem = %s;' % (self._insidetype.cppstr(), self._insidetype.c2cpp('input[i]'))
+		cbuilder += 'retval.append(cppitem);'
+		cbuilder += '}'
+		cbuilder += 'return retval;'
+		cbuilder += '}(%s)' % varname
+		return cbuilder
 	def cpp2c (self, varname):
 		return ''
 	def cfree (self, varname):
@@ -109,6 +123,8 @@ def functionParse (func):
 		functiondef += argtype.cpp2c(arg.get_name())
 		functiondef += ';\n'
 
+	functiondef += '\n'
+
 	if not func.skip_return():
 		functiondef += returntype.cstr();
 		functiondef += ' retval_ctype = ';
@@ -127,20 +143,24 @@ def functionParse (func):
 		functiondef += ';\n'
 		cfree = returntype.cfree('retval_ctype')
 		if cfree != '':
-			functiondef += '%s\n' % (cfree)
+			functiondef += '%s;\n' % (cfree)
+
+	functiondef += '\n'
 
 	for arg in func.get_arguments():
 		argtype = typeParse (arg.get_type())
 		cfree = argtype.cfree('%s_ctype' % (arg.get_name()))
 		if cfree != '':
-			functiondef += '%s\n' % (cfree)
+			functiondef += '%s;\n' % (cfree)
+
+	functiondef += '\n'
 	
 	if not func.skip_return():
 		functiondef += 'return retval;\n'
 	else:
 		functiondef += 'return;\n'
 
-	functiondef += '}\n'
+	functiondef += '}\n\n'
 	return functiondef 
 
 def objectParse (obj):
