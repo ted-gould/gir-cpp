@@ -1,0 +1,13 @@
+#!/usr/bin/python3
+
+import xml.etree.ElementTree as ET
+import sys
+
+def gir2cpp (root):
+
+	return "foo"
+
+if __name__ == '__main__':
+	tree = ET.parse(sys.argv[1])
+	cpp = gir2cpp(tree.getroot());
+	print(cpp);
