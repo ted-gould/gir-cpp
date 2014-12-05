@@ -20,9 +20,13 @@ class Typeinfo:
 	def c2cpp (self, varname):
 		return self._c2cpp % (varname)
 	def cfree (self, varname):
-		if not self._cfree or self._cfree == '':
+		if self._cfree == '':
 			return ''
 		return self._cfree % (varname)
+
+class TypeUnknown(Typeinfo):
+	def __init__(self):
+		self._cstr = 'unknown'
 
 class TypeBool(Typeinfo):
 	def __init__(self):
@@ -30,6 +34,7 @@ class TypeBool(Typeinfo):
 		self._cppstr = 'bool'
 		self._c2cpp = '(%s == TRUE ? true : false)'
 		self._cpp2c = '(%s ? TRUE : FALSE)'
+		self._cfree = ''
 
 class TypeInt(Typeinfo):
 	def __init__(self):
@@ -37,6 +42,7 @@ class TypeInt(Typeinfo):
 		self._cppstr = 'int'
 		self._c2cpp = '%s'
 		self._cpp2c = '%s'
+		self._cfree = ''
 
 class TypeString(Typeinfo):
 	def __init__(self):
@@ -72,21 +78,69 @@ def typeParse (typeinfo):
 	elif typeinfo.get_tag_as_string() == 'array':
 		return TypeArray(typeParse(typeinfo.get_param_type(0)))
 	else:
-		return Typeinfo('unknown', 'unknown', '/* TODO */', '/* TODO */')
+		return TypeUnknown()
 
 def functionParse (func):
+	returntype = typeParse(func.get_return_type())
+	if returntype.cstr() == 'unknown':
+		return ''
 	functiondef = ''
-	functiondef += typeParse(func.get_return_type()).cppstr()
+	if not func.skip_return():
+		functiondef += returntype.cppstr()
+	else:
+		functiondef += 'void'
 	functiondef += ' '
 	functiondef += func.get_name()
 	functiondef += ' ( '
 	for arg in func.get_arguments():
+		argtype = typeParse (arg.get_type())
+		if argtype.cstr() == 'unknown':
+			return ''
 		functiondef += typeParse(arg.get_type()).cppstr()
 		functiondef += ' '
 		functiondef += arg.get_name()
 		functiondef += ', '
-	functiondef += ' );\n'
+	functiondef += ' ) {\n'
+
+	for arg in func.get_arguments():
+		argtype = typeParse (arg.get_type())
+		functiondef += argtype.cstr();
+		functiondef += ' %s_ctype = ' % (arg.get_name())
+		functiondef += argtype.cpp2c(arg.get_name())
+		functiondef += ';\n'
+
+	if not func.skip_return():
+		functiondef += returntype.cstr();
+		functiondef += ' retval_ctype = ';
+
+	functiondef += '%s (' % (func.get_symbol())
+
+	for arg in func.get_arguments():
+		functiondef += '%s_ctype, ' % (arg.get_name())
+
+	functiondef += ');\n'
+
+	if not func.skip_return():
+		functiondef += returntype.cppstr()
+		functiondef += ' retval = '
+		functiondef += returntype.c2cpp('retval_ctype')
+		functiondef += ';\n'
+		cfree = returntype.cfree('retval_ctype')
+		if cfree != '':
+			functiondef += '%s\n' % (cfree)
+
+	for arg in func.get_arguments():
+		argtype = typeParse (arg.get_type())
+		cfree = argtype.cfree('%s_ctype' % (arg.get_name()))
+		if cfree != '':
+			functiondef += '%s\n' % (cfree)
 	
+	if not func.skip_return():
+		functiondef += 'return retval;\n'
+	else:
+		functiondef += 'return;\n'
+
+	functiondef += '}\n'
 	return functiondef 
 
 def objectParse (obj):
