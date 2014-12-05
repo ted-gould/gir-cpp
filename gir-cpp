@@ -1,13 +1,25 @@
 #!/usr/bin/python3
 
-import xml.etree.ElementTree as ET
 import sys
+from gi.repository import UbuntuAppLaunch as importedgir
+import gi
 
-def gir2cpp (root):
+def functionParse (func):
+	return ''
 
-	return "foo"
+def objectParse (obj):
+	cppout = ''
+
+	for item in obj.__dir__():
+		if item.startswith('_'):
+			continue
+		if obj.__getattr__(item).__class__ is 'gi.FunctionInfo':
+			cppout += functionParse(item)
+
+	return cppout
 
 if __name__ == '__main__':
-	tree = ET.parse(sys.argv[1])
-	cpp = gir2cpp(tree.getroot());
+	cpp = 'namespace GirCpp::%s {\n' % (importedgir._namespace)
+	cpp += objectParse(importedgir);
+	cpp += '}\n'
 	print(cpp);
