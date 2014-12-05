@@ -4,8 +4,35 @@ import sys
 from gi.repository import UbuntuAppLaunch as importedgir
 import gi
 
+def typeParse (typeinfo):
+	if typeinfo.get_tag_as_string() == 'gboolean':
+		return 'bool'
+	elif typeinfo.get_tag_as_string() == 'gint32':
+		return 'int'
+	elif typeinfo.get_tag_as_string() == 'utf8':
+		return 'std::string'
+	elif typeinfo.get_tag_as_string() == 'array':
+		arraystr = 'std::vector<'
+		arraystr += typeParse(typeinfo.get_param_type(0))
+		arraystr += '>'
+		return arraystr
+	else:
+		return 'unknown(%s)' % typeinfo.get_tag_as_string()
+
 def functionParse (func):
-	return ''
+	functiondef = ''
+	functiondef += typeParse(func.get_return_type())
+	functiondef += ' '
+	functiondef += func.get_name()
+	functiondef += ' ( '
+	for arg in func.get_arguments():
+		functiondef += typeParse(arg.get_type())
+		functiondef += ' '
+		functiondef += arg.get_name()
+		functiondef += ', '
+	functiondef += ' );\n'
+	
+	return functiondef 
 
 def objectParse (obj):
 	cppout = ''
@@ -13,8 +40,8 @@ def objectParse (obj):
 	for item in obj.__dir__():
 		if item.startswith('_'):
 			continue
-		if obj.__getattr__(item).__class__ is 'gi.FunctionInfo':
-			cppout += functionParse(item)
+		if str(obj.__getattr__(item).__class__) == "<class 'gi.FunctionInfo'>":
+			cppout += functionParse(obj.__getattr__(item))
 
 	return cppout
 
