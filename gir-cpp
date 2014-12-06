@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 import sys
-from gi.repository import UbuntuAppLaunch as importedgir
+from gi.repository import Zeitgeist as importedgir
 import gi
 
 class Typeinfo:
@@ -42,6 +42,15 @@ class TypeInt(Typeinfo):
 	def __init__(self):
 		self._cstr = 'gint32'
 		self._cppstr = 'int'
+		self._c2cpp = '%s'
+		self._cpp2c = '%s'
+		self._cfree = ''
+		self._marker = '0'
+
+class TypeInt64(Typeinfo):
+	def __init__(self):
+		self._cstr = 'gint64'
+		self._cppstr = 'long'
 		self._c2cpp = '%s'
 		self._cpp2c = '%s'
 		self._cfree = ''
@@ -104,11 +113,17 @@ def typeParse (typeinfo):
 		return TypeBool()
 	elif typeinfo.get_tag_as_string() == 'gint32':
 		return TypeInt()
+	elif typeinfo.get_tag_as_string() == 'gint64':
+		return TypeInt64()
 	elif typeinfo.get_tag_as_string() == 'utf8':
 		return TypeString()
 	elif typeinfo.get_tag_as_string() == 'array':
-		return TypeArray(typeParse(typeinfo.get_param_type(0)))
+		internaltype = typeParse(typeinfo.get_param_type(0))
+		if internaltype.cstr() == 'unknown':
+			return TypeUnknown()
+		return TypeArray(internaltype)
 	else:
+		print("Unknown: %s" % (typeinfo.get_tag_as_string()))
 		return TypeUnknown()
 
 def functionParse (func):
