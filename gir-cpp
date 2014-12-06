@@ -78,9 +78,26 @@ class TypeArray(Typeinfo):
 		cbuilder += '}(%s)' % varname
 		return cbuilder
 	def cpp2c (self, varname):
-		return ''
+		cbuilder = ''
+		cbuilder += '[](%s input) => %s {' % (self.cstr(), self.cppstr())
+		cbuilder += 'GArray * retarray = g_array_new(TRUE, TRUE, sizeof(%s));' % (self._insidetype.cstr())
+		cbuilder += 'std::for_each(input.begin(), input.end(), [retarray](%s item) {'
+		cbuilder += '%s item_cval = %s;' % (self._insidetype.cstr(), self._insidetype.cpp2c('item'))
+		cbuilder += 'g_array_append_val(retarray, item_cval);'
+		cbuilder += '});'
+		cbuilder += 'return (%s)g_array_free(retarray, FALSE);' % (self._insidetype.cstr())
+		cbuilder += '}(%s)' % varname
+		return cbuilder
 	def cfree (self, varname):
-		return ''
+		cbuilder = ''
+		cbuilder += '[](%s input) {' % (self.cstr())
+		cbuilder += 'int i = 0; '
+		cbuilder += 'for (i = 0; input[i] != %s; i++) {' % (self._insidetype.marker())
+		cbuilder += self._insidetype.cfree('input[i]')
+		cbuilder += '}'
+		cbuilder += 'g_free(input);'
+		cbuilder += '}(%s)' % varname
+		return cbuilder
 
 def typeParse (typeinfo):
 	if typeinfo.get_tag_as_string() == 'gboolean':
