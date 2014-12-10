@@ -163,6 +163,9 @@ def functionParse (func):
 
 	functiondef += '%s (' % (func.get_symbol())
 
+	if func.is_method():
+		functiondef += 'this, '
+
 	for arg in func.get_arguments():
 		functiondef += '%s_ctype, ' % (arg.get_name())
 
@@ -202,9 +205,28 @@ def objectParse (obj):
 	cppout += 'private:\n'
 	cppout += 'std::shared_ptr<%s> internalObjectPtr;\n' % (info.get_type_name())
 	cppout += 'public:\n'
+	cppout += '/* constructors */\n'
+	cppout += '%s (%s * inobj) {\n' % (obj.__name__, info.get_type_name())
+	cppout += 'internalObjectPtr = std::make_shared<%s>(g_object_ref_sink(inobj), [](%s * deadobj){ g_clear_object(&deadobj); });' % (info.get_type_name(), info.get_type_name())
+	cppout += '}\n'
+	cppout += '%s (std::shared_ptr<%s> inobj) {\n' % (obj.__name__, info.get_type_name())
+	cppout += 'internalObjectPtr = inobj;\n'
+	cppout += '}\n'
 
+	cppout += '\n/* methods */\n'
 	for method in info.get_methods():
 		cppout += functionParse(method)
+
+	cppout += '\n/* casting */\n'
+	cppout += 'operator %s * () {\n' % (info.get_type_name())
+	cppout += 'return internalObjPtr.get();\n'
+	cppout += '}\n'
+	cppout += 'operator std::shared_ptr<%s> () {\n' % (info.get_type_name())
+	cppout += 'return std::copy(internalObjectPtr);\n'
+	cppout += '}\n'
+	cppout += 'operator GObject * () {\n'
+	cppout += 'return G_OBJECT(internalObjPtr.get());\n'
+	cppout += '}\n'
 
 	cppout += '}\n\n'
 	return cppout
