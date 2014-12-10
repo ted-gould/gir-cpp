@@ -116,7 +116,7 @@ class TypeInterface(Typeinfo):
 		self._cppstr = 'GirCpp::%s::%s' % (iinfo.get_namespace(), iinfo.get_name())
 		self._c2cpp = 'GirCpp::%s::%s(%s)' % (iinfo.get_namespace(), iinfo.get_name(), '%s')
 		self._cpp2c = 'g_object_ref(%s)'
-		self._cfree = 'g_object_free(%s)'
+		self._cfree = 'g_object_unref(%s)'
 		self._marker = 'NULL'
 
 class TypeArray(Typeinfo):
@@ -130,37 +130,128 @@ class TypeArray(Typeinfo):
 		return 'std::vector<%s>' % (self._insidetype.cppstr())
 	def c2cpp (self, varname):
 		cbuilder = ''
-		cbuilder += '[](%s input) => %s {' % (self.cstr(), self.cppstr())
-		cbuilder += '%s retval();' % self.cppstr()
-		cbuilder += 'int i = 0; '
-		cbuilder += 'for (i = 0; input[i] != %s; i++) {' % (self._insidetype.marker())
-		cbuilder += '%s cppitem = %s;' % (self._insidetype.cppstr(), self._insidetype.c2cpp('input[i]'))
-		cbuilder += 'retval.append(cppitem);'
-		cbuilder += '}'
-		cbuilder += 'return retval;'
+		cbuilder += '[](%s input) => %s {\n' % (self.cstr(), self.cppstr())
+		cbuilder += '%s retval();\n' % self.cppstr()
+		cbuilder += 'int i = 0;\n'
+		cbuilder += 'for (i = 0; input[i] != %s; i++) {\n' % (self._insidetype.marker())
+		cbuilder += '%s cppitem = %s;\n' % (self._insidetype.cppstr(), self._insidetype.c2cpp('input[i]'))
+		cbuilder += 'retval.append(cppitem);\n'
+		cbuilder += '}\n'
+		cbuilder += 'return retval;\n'
 		cbuilder += '}(%s)' % varname
 		return cbuilder
 	def cpp2c (self, varname):
 		cbuilder = ''
-		cbuilder += '[](%s input) => %s {' % (self.cstr(), self.cppstr())
-		cbuilder += 'GArray * retarray = g_array_new(TRUE, TRUE, sizeof(%s));' % (self._insidetype.cstr())
-		cbuilder += 'std::for_each(input.begin(), input.end(), [retarray](%s item) {'
-		cbuilder += '%s item_cval = %s;' % (self._insidetype.cstr(), self._insidetype.cpp2c('item'))
-		cbuilder += 'g_array_append_val(retarray, item_cval);'
-		cbuilder += '});'
-		cbuilder += 'return (%s)g_array_free(retarray, FALSE);' % (self._insidetype.cstr())
+		cbuilder += '[](%s input) => %s {\n' % (self.cstr(), self.cppstr())
+		cbuilder += 'GArray * retarray = g_array_new(TRUE, TRUE, sizeof(%s));\n' % (self._insidetype.cstr())
+		cbuilder += 'std::for_each(input.begin(), input.end(), [retarray](%s item) {\n'
+		cbuilder += '%s item_cval = %s;\n' % (self._insidetype.cstr(), self._insidetype.cpp2c('item'))
+		cbuilder += 'g_array_append_val(retarray, item_cval);\n'
+		cbuilder += '});\n'
+		cbuilder += 'return (%s)g_array_free(retarray, FALSE);\n' % (self._insidetype.cstr())
 		cbuilder += '}(%s)' % varname
 		return cbuilder
 	def cfree (self, varname):
 		cbuilder = ''
-		cbuilder += '[](%s input) {' % (self.cstr())
-		cbuilder += 'int i = 0; '
-		cbuilder += 'for (i = 0; input[i] != %s; i++) {' % (self._insidetype.marker())
-		cbuilder += self._insidetype.cfree('input[i]')
-		cbuilder += '}'
-		cbuilder += 'g_free(input);'
+		if self._insidetype.cfree('foo') != '':
+			cbuilder += '[](%s input) {\n' % (self.cstr())
+			cbuilder += 'int i = 0;\n'
+			cbuilder += 'for (i = 0; input[i] != %s; i++) {\n' % (self._insidetype.marker())
+			cbuilder += self._insidetype.cfree('input[i]')
+			cbuilder += '\n}\n'
+			cbuilder += 'g_free(input);\n'
+			cbuilder += '}(%s)' % varname
+		else:
+			cbuilder += 'g_free(%s)' % (varname)
+		return cbuilder
+
+class TypeGlist(Typeinfo):
+	def __init__(self, insidetype):
+		self._insidetype = insidetype
+	def cstr (self):
+		return 'GList *'
+	def cppstr (self):
+		return 'std::vector<%s>' % (self._insidetype.cppstr())
+	def c2cpp (self, varname):
+		cbuilder = ''
+		cbuilder += '[](%s input) => %s {\n' % (self.cstr(), self.cppstr())
+		cbuilder += '%s retval();\n' % self.cppstr()
+		cbuilder += 'GList * i = input;\n'
+		cbuilder += 'for (; i != nullptr; i = g_list_next(i)) {\n'
+		cbuilder += '%s item = (%s)i->data;\n' % (self._insidetype.cstr(), self._insidetype.cstr())
+		cbuilder += '%s cppitem = %s;\n' % (self._insidetype.cppstr(), self._insidetype.c2cpp('item'))
+		cbuilder += 'retval.append(cppitem);\n'
+		cbuilder += '}\n'
+		cbuilder += 'return retval;\n'
 		cbuilder += '}(%s)' % varname
 		return cbuilder
+	def cpp2c (self, varname):
+		cbuilder = ''
+		cbuilder += '[](%s input) => %s {\n' % (self.cstr(), self.cppstr())
+		cbuilder += 'GList * retarray = nullptr;\n'
+		cbuilder += 'std::for_each(input.begin(), input.end(), [&retarray](%s item) {'
+		cbuilder += '%s item_cval = %s;' % (self._insidetype.cstr(), self._insidetype.cpp2c('item'))
+		cbuilder += 'retarray = g_list_prepend(retarray, item_cval);'
+		cbuilder += '});\n'
+		cbuilder += 'return g_list_reverse(retarray);\n'
+		cbuilder += '}(%s)' % varname
+		return cbuilder
+	def cfree (self, varname):
+		cbuilder = ''
+		if self._insidetype.cfree('foo') != '':
+			cbuilder += '[](%s input) {\n' % (self.cstr())
+			cbuilder += 'GList * i = input;\n'
+			cbuilder += 'for (; i != nullptr; i = g_list_next(i)) {\n'
+			cbuilder += '%s item = (%s)i->data;\n' % (self._insidetype.cstr(), self._insidetype.cstr())
+			cbuilder += self._insidetype.cfree('item')
+			cbuilder += '}\n'
+			cbuilder += 'g_list_free(input);\n'
+			cbuilder += '}(%s)' % varname
+		else:
+			cbuilder += 'g_list_free(%s);' % (varname)
+		return cbuilder
+
+class TypeGhash(Typeinfo):
+	def __init__(self, insidekeytype, insidevaluetype):
+		self._insidekeytype = insidekeytype
+		self._insidevaluetype = insidevaluetype
+	def cstr (self):
+		return 'GHashTable *'
+	def cppstr (self):
+		return 'std::map<%s, %s>' % (self._insidekeytype.cppstr(), self._insidevaluetype.cppstr())
+	def c2cpp (self, varname):
+		cbuilder = ''
+		cbuilder += '[](%s input) => %s {\n' % (self.cstr(), self.cppstr())
+		cbuilder += '%s retval();\n' % self.cppstr()
+		cbuilder += 'GHashTableIter iter;\n'
+		cbuilder += 'gpointer pkey, pvalue;\n\n'
+		cbuilder += 'g_hash_table_iter_init(&iter, input);\n'
+		cbuilder += 'while (g_hash_table_iter_next(&iter, &pkey, &pvalue)) {\n'
+		cbuilder += '%s key_ctype = (%s)pkey;\n' % (self._insidekeytype.cstr(), self._insidekeytype.cstr())
+		cbuilder += '%s value_ctype = (%s)pvalue;\n\n' % (self._insidevaluetype.cstr(), self._insidevaluetype.cstr())
+		cbuilder += '%s key_cpptype = %s;\n' % (self._insidekeytype.cppstr(), self._insidekeytype.c2cpp('key_ctype'))
+		cbuilder += '%s value_cpptype = %s;\n\n' % (self._insidevaluetype.cppstr(), self._insidevaluetype.c2cpp('value_ctype'))
+		cbuilder += 'retval.append(key_cpptype, value_cpptype);\n'
+		cbuilder += '}\n'
+		cbuilder += 'return retval;\n'
+		cbuilder += '}(%s)' % varname
+		return cbuilder
+	def cpp2c (self, varname):
+		cbuilder = ''
+		cbuilder += '[](%s input) => %s {\n' % (self.cppstr(), self.cstr())
+		cbuilder += 'GHashTable * rethash = g_hash_table_new_full(g_direct_hash, g_direct_equal,\n' # TODO add hash equal functions to all the types
+		cbuilder += '[](gpointer data) -> void {\n%s;\n},\n' % (self._insidekeytype.cfree('(%s)data' % self._insidekeytype.cstr()))
+		cbuilder += '[](gpointer data) -> void {\n%s;\n});\n' % (self._insidevaluetype.cfree('(%s)data' % self._insidevaluetype.cstr()))
+		cbuilder += 'std::for_each(input.begin(), input.end(), [rethash](std::pair<%s, %s> item) {\n'
+		cbuilder += '%s key_cval = %s;\n' % (self._insidekeytype.cstr(), self._insidekeytype.cpp2c('item.first'))
+		cbuilder += '%s value_cval = %s;\n' % (self._insidevaluetype.cstr(), self._insidevaluetype.cpp2c('item.second'))
+		cbuilder += 'g_hash_table_insert(rethash, key_cval, value_cval);\n'
+		cbuilder += '});\n'
+		cbuilder += 'return rethash;\n'
+		cbuilder += '}(%s)' % varname
+		return cbuilder
+	def cfree (self, varname):
+		return 'g_hash_table_unref(%s);' % (varname)
 
 def typeParse (typeinfo):
 	if typeinfo.get_tag_as_string() == 'gboolean':
@@ -192,6 +283,17 @@ def typeParse (typeinfo):
 		if internaltype.cstr() == 'unknown':
 			return TypeUnknown()
 		return TypeArray(internaltype)
+	elif typeinfo.get_tag_as_string() == 'glist':
+		internaltype = typeParse(typeinfo.get_param_type(0))
+		if internaltype.cstr() == 'unknown':
+			return TypeUnknown()
+		return TypeGlist(internaltype)
+	elif typeinfo.get_tag_as_string() == 'ghash':
+		keytype = typeParse(typeinfo.get_param_type(0))
+		valtype = typeParse(typeinfo.get_param_type(1))
+		if keytype.cstr() == 'unknown' or valtype.cstr() == 'unknown':
+			return TypeUnknown()
+		return TypeGhash(keytype, valtype)
 	elif typeinfo.get_tag_as_string() == 'void':
 		return TypeUnknown()
 	else:
