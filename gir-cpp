@@ -196,6 +196,20 @@ def functionParse (func):
 	return functiondef 
 
 def objectParse (obj):
+	info = obj.__info__
+	cppout = '';
+	cppout += 'class %s {\n' % (obj.__name__)
+	cppout += 'private:\n'
+	cppout += 'std::shared_ptr<%s> internalObjectPtr;\n' % (info.get_type_name())
+	cppout += 'public:\n'
+
+	for method in info.get_methods():
+		cppout += functionParse(method)
+
+	cppout += '}\n\n'
+	return cppout
+
+def namespaceParse (obj):
 	cppout = ''
 
 	for item in obj.__dir__():
@@ -203,11 +217,13 @@ def objectParse (obj):
 			continue
 		if str(obj.__getattr__(item).__class__) == "<class 'gi.FunctionInfo'>":
 			cppout += functionParse(obj.__getattr__(item))
+		elif str(obj.__getattr__(item).__class__) == "<class 'gi.types.GObjectMeta'>":
+			cppout += objectParse(obj.__getattr__(item))
 
 	return cppout
 
 if __name__ == '__main__':
 	cpp = 'namespace GirCpp::%s {\n' % (importedgir._namespace)
-	cpp += objectParse(importedgir);
+	cpp += namespaceParse(importedgir);
 	cpp += '}\n'
 	print(cpp);
