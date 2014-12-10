@@ -65,6 +65,15 @@ class TypeString(Typeinfo):
 		self._cfree = 'g_free(%s)'
 		self._marker = 'NULL'
 
+class TypeInterface(Typeinfo):
+	def __init__(self, iinfo):
+		self._cstr = '%s *' % (iinfo.get_type_name())
+		self._cppstr = 'GirCpp::%s::%s' % (iinfo.get_namespace(), iinfo.get_name())
+		self._c2cpp = 'GirCpp::%s::%s(%s)' % (iinfo.get_namespace(), iinfo.get_name(), '%s')
+		self._cpp2c = 'g_object_ref(%s)'
+		self._cfree = 'g_object_free(%s)'
+		self._marker = 'NULL'
+
 class TypeArray(Typeinfo):
 	def __init__(self, insidetype):
 		self._insidetype = insidetype
@@ -117,6 +126,12 @@ def typeParse (typeinfo):
 		return TypeInt64()
 	elif typeinfo.get_tag_as_string() == 'utf8':
 		return TypeString()
+	elif typeinfo.get_tag_as_string() == 'interface':
+		iface = typeinfo.get_interface()
+		if iface.get_name() == 'ObjectPath':
+			return TypeString()
+		else:
+			return TypeInterface(iface)
 	elif typeinfo.get_tag_as_string() == 'array':
 		internaltype = typeParse(typeinfo.get_param_type(0))
 		if internaltype.cstr() == 'unknown':
