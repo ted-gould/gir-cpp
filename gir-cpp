@@ -312,14 +312,20 @@ def functionParse (func):
 	functiondef += ' '
 	functiondef += func.get_name()
 	functiondef += ' ( '
+
+	arglist = []
 	for arg in func.get_arguments():
 		argtype = typeParse (arg.get_type())
 		if argtype.cstr() == 'unknown':
 			return ''
-		functiondef += typeParse(arg.get_type()).cppstr()
-		functiondef += ' '
-		functiondef += arg.get_name()
-		functiondef += ', '
+
+		argstr = ''
+		argstr += typeParse(arg.get_type()).cppstr()
+		argstr += ' '
+		argstr += arg.get_name()
+
+		arglist.append(argstr)
+	functiondef += ', '.join(arglist)
 	functiondef += ' ) {\n'
 
 	for arg in func.get_arguments():
@@ -337,12 +343,14 @@ def functionParse (func):
 
 	functiondef += '%s (' % (func.get_symbol())
 
+	arglist = []
 	if func.is_method():
-		functiondef += 'this, '
+		arglist.append('this')
 
 	for arg in func.get_arguments():
-		functiondef += '%s_ctype, ' % (arg.get_name())
+		arglist.append('%s_ctype' % (arg.get_name()))
 
+	functiondef += ', '.join(arglist)
 	functiondef += ');\n'
 
 	if not func.skip_return():
